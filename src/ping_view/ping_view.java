@@ -209,6 +209,9 @@ public class ping_view {
 				
 				t1 = null;
 				t2 = null;
+				
+				textArea.setText("");
+				
 //				for (int i = 0; i < t1.length; i++) {
 ////					System.out.println(t1[i].getStackTrace());
 //					t1[i].interrupt();	
