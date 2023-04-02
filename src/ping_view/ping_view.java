@@ -17,11 +17,15 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.PlainDocument;
 import javax.swing.SwingConstants;
 
 public class ping_view {
@@ -31,6 +35,13 @@ public class ping_view {
 	private JTextArea textArea;
 	private JTextField textField;
 	private JTable table;
+
+//	static String[] authorized = {
+//			"tim.flyhighyoga@gmail.com",
+//			"alex.ke.scg@gmail.com"
+//			};
+
+	static boolean k1 = false;
 
 	private String system_name = System.getProperty("os.name");
 
@@ -57,7 +68,6 @@ public class ping_view {
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
 				try {
-
 					ping_view window = new ping_view();
 					window.frmPing.setVisible(true);
 				} catch (Exception e) {
@@ -80,10 +90,29 @@ public class ping_view {
 	private void initialize() {
 		frmPing = new JFrame();
 		frmPing.setIconImage(Toolkit.getDefaultToolkit().getImage(ping_view.class.getResource("/image/ping.png")));
-		frmPing.setTitle("ping小工具");
+		frmPing.setTitle("ping小工具V1.0");
 		frmPing.setBounds(100, 100, 536, 394);
 		frmPing.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frmPing.getContentPane().setLayout(null);
+
+//		//授權
+//		for(int i=0;i<authorized.length;i++) {
+//			if(authorized[i].equals(mac_apple_id())) {
+//				k1=true;
+//				break;
+//			}else {
+//				k1=false;
+//			}
+//		}
+//		
+//		if(k1) {
+//			System.out.println("授權驗證成功");			
+//		}else {
+//			JOptionPane.showMessageDialog(frmPing,"請透過正規管道獲取軟體","授權失敗！", JOptionPane.ERROR_MESSAGE);
+//			System.exit(0);
+//			System.out.println("授權驗證失敗");			
+//			return;
+//		}
 
 		textArea = new JTextArea();
 //		textArea.setBounds(327, 28, 174, 226);
@@ -138,7 +167,7 @@ public class ping_view {
 		btnNewButton.setBounds(327, 266, 114, 29);
 		frmPing.getContentPane().add(btnNewButton);
 
-		JButton btnTcptelnet = new JButton("TCP_ping");
+		JButton btnTcptelnet = new JButton("TCP_port");
 		btnTcptelnet.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				System.gc();
@@ -181,6 +210,7 @@ public class ping_view {
 
 		textField = new JTextField();
 		textField.setHorizontalAlignment(SwingConstants.RIGHT);
+		textField.setDocument(new NumberDocument());
 		textField.setText("80");
 		textField.setBounds(327, 306, 61, 29);
 		frmPing.getContentPane().add(textField);
@@ -206,12 +236,12 @@ public class ping_view {
 		JButton btnNewButton_1 = new JButton("清除");
 		btnNewButton_1.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				
+
 				t1 = null;
 				t2 = null;
-				
+
 				textArea.setText("");
-				
+
 //				for (int i = 0; i < t1.length; i++) {
 ////					System.out.println(t1[i].getStackTrace());
 //					t1[i].interrupt();	
@@ -239,6 +269,29 @@ public class ping_view {
 		table_timer table_t = new table_timer();
 		Thread timer1 = new Thread(table_t);
 		timer1.start();
+	}
+
+	// mac 電腦取得apple ID 方法(shell指令)
+	public static String mac_apple_id() {
+		String line = "";
+		String value = "";
+		try {
+			String[] command = { "/bin/sh", "-c",
+					"defaults read MobileMeAccounts Accounts | grep AccountID | cut -d \\\" -f2" };
+			Process pro = Runtime.getRuntime().exec(command);
+			BufferedReader buf = new BufferedReader(new InputStreamReader(pro.getInputStream()));
+
+			while ((line = buf.readLine()) != null) {
+//				System.out.println(line);
+				value = line;
+			}
+
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return value;
 	}
 
 	class ICMP_ping implements Runnable {
@@ -270,7 +323,7 @@ public class ping_view {
 				}
 				data[num][1] = ip;
 				data[num][2] = "ICMP";
-				
+
 				if (!getcallback) {
 					try {
 						Thread.sleep(300);
@@ -297,12 +350,12 @@ public class ping_view {
 			String line = null;
 			Boolean b = false;
 			int count = 0;
-			Process pro = null ;
+			Process pro = null;
 			BufferedReader buf = null;
 			try {
-				 pro = Runtime.getRuntime().exec("ping " + IP);
-				 buf = new BufferedReader(new InputStreamReader(pro.getInputStream()));
-							
+				pro = Runtime.getRuntime().exec("ping " + IP);
+				buf = new BufferedReader(new InputStreamReader(pro.getInputStream()));
+
 				while ((line = buf.readLine()) != null) {
 					if (line.indexOf("time=") >= 1) {
 						b = true;
@@ -320,22 +373,22 @@ public class ping_view {
 					count++;
 				}
 			} catch (Exception ex) {
-				System.out.println(ex.getMessage());				
+				System.out.println(ex.getMessage());
 			}
-			
+
 			try {
-				pro.destroy();	
+				pro.destroy();
 				buf.close();
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
-			}		
+			}
 			return b;
 		}
 
 		// windows使用
 		private Boolean ping_fn2(String IP) {
-			int timeOut = 100; // 響應超時時間
+			int timeOut = 600; // 響應超時時間
 			Boolean b = false;
 
 			try {
@@ -401,16 +454,11 @@ public class ping_view {
 			int timeOut = 1000;
 			Socket socket = new Socket();
 			try {
-				socket.connect(new InetSocketAddress(IP, Port), timeOut);
+				socket.connect(new InetSocketAddress(IP.replace(" ", ""), Port), timeOut);
 				isConnent = socket.isConnected();
 			} catch (IOException e) {
 				System.err.println(e.getMessage());
 			} finally {
-				try {
-					socket.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
 			}
 			return isConnent;
 		}
@@ -449,5 +497,29 @@ class ExtendedTableModel extends DefaultTableModel {
 	// 重寫getColumnClass方法，根據每列的第一個值來返回其真實的資料型別
 	public Class<? extends Object> getColumnClass(int c) {
 		return getValueAt(0, c).getClass();
+	}
+}
+
+
+ @SuppressWarnings("serial")
+class NumberDocument extends PlainDocument {
+	public NumberDocument() {
+	}
+
+	public void insertString(int var1, String var2, AttributeSet var3) throws BadLocationException {
+		if (this.isNumeric(var2)) {
+			super.insertString(var1, var2, var3);
+		} else {
+			Toolkit.getDefaultToolkit().beep();
+		}
+	}
+
+	private boolean isNumeric(String var1) {
+		try {
+			Long.valueOf(var1);
+			return true;
+		} catch (NumberFormatException var3) {
+			return false;
+		}
 	}
 }
