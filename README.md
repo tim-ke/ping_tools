@@ -10,14 +10,16 @@ ping小工具
 3.測試新開機客戶IP是否有正常
 
 操作方法
-<img src="https://github.com/tim-ke/ping_tools/assets/49004331/e421908c-46ee-44e6-9908-1e3b3d8a51df" style="width:60%;">
+
+<br><img src="https://github.com/tim-ke/ping_tools/assets/49004331/e421908c-46ee-44e6-9908-1e3b3d8a51df" style="width:60%;">
 
 
 安裝流程
 1.下載java8 - jre 套件
 https://javadl.oracle.com/webapps/download/AutoDL?BundleId=247939_0ae14417abb444ebb02b9815e2103550
 點擊安裝
-![image](https://github.com/tim-ke/ping_tools/assets/49004331/216eda51-b160-4e21-a128-ad1443409822)
+<br><img src="https://github.com/tim-ke/ping_tools/assets/49004331/216eda51-b160-4e21-a128-ad1443409822" style="width:60%;">
+
 ![image](https://github.com/tim-ke/ping_tools/assets/49004331/ea04dc19-9bce-4f89-a54e-36e47bec3231)
 
 2.下載ping 小工具
