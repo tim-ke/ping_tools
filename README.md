@@ -10,7 +10,7 @@ ping小工具
 3.測試新開機客戶IP是否有正常
 
 操作方法
-<img src="https://github.com/tim-ke/ping_tools/assets/49004331/e421908c-46ee-44e6-9908-1e3b3d8a51df" style="max-width:10%;max-height:10%;">
+<img src="https://github.com/tim-ke/ping_tools/assets/49004331/e421908c-46ee-44e6-9908-1e3b3d8a51df" style="width:10%;height:10%;">
 
 
 安裝流程
