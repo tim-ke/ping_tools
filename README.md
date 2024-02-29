@@ -10,7 +10,7 @@ ping小工具
 3.測試新開機客戶IP是否有正常<br>
 
 操作方法<br>
-<br><img src="https://github.com/tim-ke/ping_tools/assets/49004331/e421908c-46ee-44e6-9908-1e3b3d8a51df" style="width:45%;">
+<br>![image](https://github.com/tim-ke/ping_tools/assets/49004331/728c81e3-fbfc-4f02-ab67-c9ae041c9d84)
 <br><br>
 安裝流程<br>
 1.下載java8 - jre 套件<br>
