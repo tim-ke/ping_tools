@@ -1,4 +1,4 @@
-# ping_tools
+![image](https://github.com/tim-ke/ping_tools/assets/49004331/e2c70cc6-2a3d-44b7-94b8-9118fcb71846)# ping_tools
 ping小工具
 
 需求:電腦需要安裝java8(含)以上<br>
@@ -29,7 +29,8 @@ https://drive.google.com/drive/folders/1pwV5NcFFNKSlE8GEOTLkIpk7xVUOAXZe<br>
 
 4.選擇測試IP的協定，點擊測試<br>
 
-<br><img src="https://github.com/tim-ke/ping_tools/assets/49004331/b7c0aa50-683e-48f4-9ca7-0ed27235b35e" style="width:45%;">
+<br>![image](https://github.com/tim-ke/ping_tools/assets/49004331/cb14f07f-8549-4614-9590-74a256d4d2f6)
+
 
 
 
