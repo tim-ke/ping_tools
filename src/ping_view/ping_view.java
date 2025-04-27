@@ -11,6 +11,8 @@ import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -90,7 +92,7 @@ public class ping_view {
 	private void initialize() {
 		frmPing = new JFrame();
 		frmPing.setIconImage(Toolkit.getDefaultToolkit().getImage(ping_view.class.getResource("/image/ping.png")));
-		frmPing.setTitle("ping小工具V1.0");
+		frmPing.setTitle("ping小工具V1.1");
 		frmPing.setBounds(100, 100, 536, 394);
 		frmPing.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frmPing.getContentPane().setLayout(null);
@@ -126,8 +128,20 @@ public class ping_view {
 			public void actionPerformed(ActionEvent e) {
 				System.gc();
 				t1 = null;
+				
+				
+		        // 分割文本按行處理
+		        String[] lines = textArea.getText().replaceAll("((\\r\\n)|\\n)[\\s\\t ]*(\\1)+", "$1").split("\n");// 刪除空行
+		        List<String> ipList = new ArrayList<>();
 
-				String[] st = textArea.getText().replaceAll("((\\r\\n)|\\n)[\\s\\t ]*(\\1)+", "$1").split("\n");// 刪除空行
+		        for (String line : lines) {
+		            ipList.addAll(parseIpRange(line.trim())); // 將解析結果加入列表
+		        }
+
+		        // 將列表轉換成陣列
+		        String[] st = ipList.toArray(new String[0]);
+				
+	
 
 //				System.out.println(st.length);
 				data = new Object[st.length][3];
@@ -173,8 +187,20 @@ public class ping_view {
 				System.gc();
 				t2 = null;
 				int port = Integer.parseInt(textField.getText());
-				String[] st = textArea.getText().replaceAll("((\\r\\n)|\\n)[\\s\\t ]*(\\1)+", "$1").split("\n");// 刪除空行
+				
+			
+		        // 分割文本按行處理
+		        String[] lines = textArea.getText().replaceAll("((\\r\\n)|\\n)[\\s\\t ]*(\\1)+", "$1").split("\n");// 刪除空行
+		        List<String> ipList = new ArrayList<>();
 
+		        for (String line : lines) {
+		            ipList.addAll(parseIpRange(line.trim())); // 將解析結果加入列表
+		        }
+
+		        // 將列表轉換成陣列
+		        String[] st = ipList.toArray(new String[0]);
+				
+			
 //				System.out.println(st.length);
 				data = new Object[st.length][3];
 
@@ -483,6 +509,31 @@ public class ping_view {
 			}
 		}
 	}
+	
+    // 方法：解析單行 IP 或範圍，並展開
+    public static List<String> parseIpRange(String input) {
+        List<String> ipList = new ArrayList<>();
+
+        // 判斷是否是範圍
+        if (input.matches("^(\\d+\\.\\d+\\.\\d+\\.\\d+)-(\\d+)$")) {
+            String[] parts = input.split("-");
+            String startIp = parts[0];
+            int startLastOctet = Integer.parseInt(startIp.substring(startIp.lastIndexOf(".") + 1));
+            int endLastOctet = Integer.parseInt(parts[1]);
+
+            // 提取前三段，例如 "149.104.172."
+            String ipBase = startIp.substring(0, startIp.lastIndexOf(".") + 1);
+
+            // 展開範圍
+            for (int i = startLastOctet; i <= endLastOctet; i++) {
+                ipList.add(ipBase + i);
+            }
+        } else if (input.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) {
+            // 單個 IP，直接加入列表
+            ipList.add(input);
+        }
+        return ipList;
+    }
 }
 
 /** Jtable重新建構類型(可放圖片) */
@@ -498,6 +549,12 @@ class ExtendedTableModel extends DefaultTableModel {
 	public Class<? extends Object> getColumnClass(int c) {
 		return getValueAt(0, c).getClass();
 	}
+	
+	
+
+
+    
+    
 }
 
 
