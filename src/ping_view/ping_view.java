@@ -51,7 +51,7 @@ import javax.swing.SwingUtilities;
 
 public class ping_view {
 
-	public static String version = "V1.2"; // 版本號
+	public static String version = "V1.21"; // 版本號
 
 	private JFrame frmPing;
 	Thread th1;
@@ -480,12 +480,17 @@ public class ping_view {
 		public void run() {
 			String resultTime = "timeout";
 			boolean success = false;
-			int timeout = 500; // 硬編碼 500ms
+			int timeout = 500; 
+
+			// 判斷是否為 IPv6 (包含冒號即視為 IPv6)
+			boolean isIPv6 = ip.contains(":");
 
 			if (system_name.contains("Mac")) {
-				resultTime = ping_mac(ip, timeout);
+				// 將 isIPv6 傳入判斷指令
+				resultTime = ping_mac(ip, timeout, isIPv6);
 				success = !resultTime.equals("timeout");
 			} else {
+				// Windows/Linux 邏輯維持不變
 				long start = System.currentTimeMillis();
 				try {
 					success = InetAddress.getByName(ip).isReachable(timeout);
@@ -498,30 +503,63 @@ public class ping_view {
 
 			data[num][0] = success ? icon_green : icon_red;
 			data[num][3] = resultTime;
-			// 直接通知 Model 更新 UI，不需要外部 Timer
 			table_md.fireTableRowsUpdated(num, num);
 			updateTable();
 		}
 
-		private String ping_mac(String ip, int timeout) {
+		private String ping_mac(String ip, int timeout, boolean isIPv6) {
 		    String line;
 		    try {
-		        // -c 1 (發送一次), -W (等待時間，單位為毫秒)
-		        Process pro = Runtime.getRuntime().exec("ping -c 1 -W " + timeout + " " + ip);
+		        List<String> command = new ArrayList<String>();
+		        if (isIPv6) {
+		            // Mac 的 ping6 不支援 -W [ms/s]，所以只給 -c 1
+		            command.add("ping6");
+		            command.add("-c");
+		            command.add("1");
+		        } else {
+		            // Mac 的 ping 支援 -W [ms]
+		            command.add("ping");
+		            command.add("-c");
+		            command.add("1");
+		            command.add("-W");
+		            command.add(String.valueOf(timeout));
+		        }
+		        command.add(ip);
+
+		        ProcessBuilder pb = new ProcessBuilder(command);
+		        pb.redirectErrorStream(true); 
+		        Process pro = pb.start();
+
+		        // 關鍵：使用 BufferedReader 讀取，但要防止它卡住
 		        BufferedReader buf = new BufferedReader(new InputStreamReader(pro.getInputStream()));
-		        while ((line = buf.readLine()) != null) {
-		            if (line.contains("time=")) {
-		                int start = line.indexOf("time=") + 5;
-		                int end = line.indexOf(" ms", start);
-		                String timeStr = line.substring(start, end).trim(); // 例如 "14.321"
+		        
+		        // 另外開一個執行續或簡單判斷時間
+		        long startTime = System.currentTimeMillis();
+
+		        while (true) {
+		            // 檢查是否超時 (給予比 timeout 稍微寬鬆一點的時間)
+		            if (System.currentTimeMillis() - startTime > timeout + 200) {
+		                pro.destroy(); // 強制終止行程
+		                break;
+		            }
+
+		            if (buf.ready()) { // 只有在有資料時才讀取，避免 readline 阻塞
+		                line = buf.readLine();
+		                if (line == null) break;
 		                
-		                // --- 去除小數點邏輯 ---
-		                // 使用 split("\\.")[0] 取得整數部分，例如 "14.321" 變為 "14"
-		                if (timeStr.contains(".")) {
-		                    timeStr = timeStr.split("\\.")[0];
+		                if (line.contains("time=")) {
+		                    int start = line.indexOf("time=") + 5;
+		                    int end = line.indexOf(" ms", start);
+		                    if (end != -1) {
+		                        String timeStr = line.substring(start, end).trim();
+		                        if (timeStr.contains(".")) {
+		                            timeStr = timeStr.split("\\.")[0];
+		                        }
+		                        return timeStr + " ms";
+		                    }
 		                }
-		                
-		                return timeStr + " ms";
+		            } else {
+		                Thread.sleep(10); // 稍微休息一下，避免 CPU 飆高
 		            }
 		        }
 		    } catch (Exception e) {
