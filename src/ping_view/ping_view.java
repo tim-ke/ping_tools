@@ -15,6 +15,8 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +53,7 @@ import javax.swing.SwingUtilities;
 
 public class ping_view {
 
-	public static String version = "V1.21"; // 版本號
+	public static String version = "V1.22"; // 版本號
 
 	private JFrame frmPing;
 	Thread th1;
@@ -330,7 +332,7 @@ public class ping_view {
 		frmPing.getContentPane().add(btnNewButton_1);
 
 		// 下拉選單 (模式切換)
-		String[] modes = { "Ping & TCP 監測模式", "Ubuntu 網卡配置模式","Debian(ipv4-舊) 網卡配置模式" , "Debian(ipv4+ipv6) 網卡配置模式", "Windows 批次檔模式","CentOS 7 網卡配置模式", "Rocky Linux 網卡配置模式" };
+		String[] modes = { "Ping & TCP 監測模式", "Ubuntu 網卡配置模式","Debian(ipv4-舊) 網卡配置模式" , "Debian(ipv4+ipv6) 網卡配置模式", "Windows 批次檔網卡配置模式","Centos 6/7 網卡配置模式", "Centos 8/9 ,Rocky 網卡配置模式", "IP Addr 指令模式","整理IP-多個IP整理成一行方法" };
 		modeComboBox = new JComboBox<>(modes);
 		modeComboBox.setBounds(327, 5, 185, 25);
 		frmPing.getContentPane().add(modeComboBox);
@@ -392,6 +394,11 @@ public class ping_view {
             case 6: //Rocky Linux 
             	NicOneField.setText("eno1");               
                break;
+            case 7: // IP Addr 指令
+            	NicOneField.setText("eno1");
+                break;
+            case 8: //整理IP-多個IP整理成一行方法
+                break;
             default:
             	break;	
 	        }
@@ -420,6 +427,12 @@ public class ping_view {
 	            case 6: //Rocky Linux 
 	            	generateRockyLinuxConfig();       
 	               break;
+	            case 7: // IP Addr 指令
+	                generateIpAddrConfig();
+	                break;
+	            case 8: // 整理IP-多個IP整理成一行方法
+	            	compactIpAndCount();
+	                break;   	               
 	            default:
 	                break;
 	        }
@@ -974,19 +987,16 @@ public class ping_view {
 	    String mask = cidrToMask(cidrInput);
 	    int prefix = Integer.parseInt(cidrInput.replace("/", "").trim());
 
-	    // 1. 分類 IPv4 與 IPv6
 	    List<String> rawLines = Arrays.asList(input.split("\n"));
-	    List<List<String>> ipv4Ranges = new ArrayList<List<String>>(); // 儲存多個連續段
+	    List<List<String>> ipv4Ranges = new ArrayList<List<String>>();
 	    List<String> ipv6s = new ArrayList<String>();
 
 	    for (String line : rawLines) {
 	        line = line.trim();
 	        if (line.isEmpty()) continue;
-	        
 	        if (line.contains(":")) {
 	            ipv6s.addAll(parseIpRange(line));
 	        } else {
-	            // 只要是輸入的一行（如 100-140），就視為一個獨立的連續段 List
 	            List<String> segment = parseIpRange(line);
 	            if (!segment.isEmpty()) {
 	                ipv4Ranges.add(segment);
@@ -994,75 +1004,86 @@ public class ping_view {
 	        }
 	    }
 
-	    StringBuilder sb = new StringBuilder();
-	    sb.append("# --- 網卡主配置文件 ---\n");
-	    sb.append("cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-").append(nicName).append("\n");
-	    sb.append("DEVICE=\"").append(nicName).append("\"\n");
-	    sb.append("NAME=\"").append(nicName).append("\"\n");
-	    sb.append("ONBOOT=yes\n");
-	    sb.append("BOOTPROTO=static\n");
+	    StringBuilder mainSb = new StringBuilder(); // 主配置文件內容
+	    StringBuilder rangeSb = new StringBuilder(); // Range 文件內容
+	    
+	    // --- 準備主配置文件 ---
+	    mainSb.append("# --- 網卡主配置文件 ---\n");
+	    mainSb.append("cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-").append(nicName).append("\n");
+	    mainSb.append("DEVICE=\"").append(nicName).append("\"\n");
+	    mainSb.append("NAME=\"").append(nicName).append("\"\n");
+	    mainSb.append("ONBOOT=yes\n");
+	    mainSb.append("BOOTPROTO=static\n");
 
-	    // --- 處理 IPv4 主位址 (取第一個連續段的第一個 IP) ---
-	    String primaryV4 = "";
-	    if (!ipv4Ranges.isEmpty() && !ipv4Ranges.get(0).isEmpty()) {
-	        primaryV4 = ipv4Ranges.get(0).get(0);
-	        String gv4 = calculateFirstAvailableIp(primaryV4, prefix);
-	        sb.append("IPADDR=").append(primaryV4).append("\n");
-	        sb.append("NETMASK=").append(mask).append("\n");
-	        sb.append("GATEWAY=").append(gv4).append("\n");
+	    int currentCloneNum = 0; // 虛擬網卡起始編號 (alias)
+	    int rangeFileIdx = 0;
+	    int extraIpIdx = 0; // 用於 IPADDRN 的計數器
+
+	    // --- 處理 IPv4 ---
+	    if (!ipv4Ranges.isEmpty()) {
+	        for (int i = 0; i < ipv4Ranges.size(); i++) {
+	            List<String> currentSegment = new ArrayList<String>(ipv4Ranges.get(i));
+	            
+	            // 邏輯判斷：如果是第一行且第一個 IP，設為主 IP (IPADDR)
+	            if (i == 0 && !currentSegment.isEmpty()) {
+	                String primaryV4 = currentSegment.get(0);
+	                String gv4 = calculateFirstAvailableIp(primaryV4, prefix);
+	                mainSb.append("IPADDR=").append(primaryV4).append("\n");
+	                mainSb.append("NETMASK=").append(mask).append("\n");
+	                mainSb.append("GATEWAY=").append(gv4).append("\n");
+	                currentSegment.remove(0); // 移除已使用的主 IP
+	            }
+
+	            if (currentSegment.isEmpty()) continue;
+
+	            // 判斷剩下的 IP 是要寫入主文件還是寫入 Range 文件
+	            // 規則：如果該行剩餘數量 <= 2，直接寫入主文件的 IPADDR_N
+	            if (currentSegment.size() <= 2) {
+	                for (String ip : currentSegment) {
+	                    extraIpIdx++;
+	                    mainSb.append("IPADDR").append(extraIpIdx).append("=").append(ip).append("\n");
+	                    mainSb.append("NETMASK").append(extraIpIdx).append("=").append(mask).append("\n");
+	                    // 注意：IPADDRn 模式在舊版系統不需要手動算 CLONENUM，系統會自動處理
+	                }
+	            } else {
+	                // 數量較多，使用 Range 文件
+	                rangeSb.append("# --- IPv4 Range段: ").append(rangeFileIdx).append(" ---\n");
+	                rangeSb.append("cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-").append(nicName)
+	                       .append("-range").append(rangeFileIdx).append("\n");
+	                rangeSb.append("IPADDR_START=").append(currentSegment.get(0)).append("\n");
+	                rangeSb.append("IPADDR_END=").append(currentSegment.get(currentSegment.size() - 1)).append("\n");
+	                rangeSb.append("NETMASK=").append(mask).append("\n");
+	                rangeSb.append("CLONENUM_START=").append(currentCloneNum).append("\n");
+	                rangeSb.append("ARPCHECK=no\n");
+	                rangeSb.append("EOF\n\n");
+	                
+	                // 累加編號：Range 文件佔用的數量
+	                currentCloneNum += currentSegment.size();
+	                rangeFileIdx++;
+	            }
+	        }
 	    }
 
-	    sb.append("DNS1=8.8.8.8\nDNS2=1.1.1.1\nARPCHECK=no\nNM_CONTROLLED=no\nZONE=public\n");
+	    mainSb.append("DNS1=8.8.8.8\nDNS2=1.1.1.1\nARPCHECK=no\nNM_CONTROLLED=no\nZONE=public\n");
 
-	    // --- 處理 IPv6 (全部放在主文件) ---
+	    // --- 處理 IPv6 ---
 	    if (!ipv6s.isEmpty()) {
-	        sb.append("IPV6INIT=yes\nIPV6_AUTOCONF=no\nIPV6_DEFROUTE=yes\nIPV6_FAILURE_FATAL=yes\n");
-	        sb.append("IPV6ADDR=").append(ipv6s.get(0)).append("/112\n");
+	        mainSb.append("IPV6INIT=yes\nIPV6_AUTOCONF=no\nIPV6_DEFROUTE=yes\nIPV6_FAILURE_FATAL=yes\n");
+	        mainSb.append("IPV6ADDR=").append(ipv6s.get(0)).append("/112\n");
 	        if (ipv6s.size() > 1) {
-	            sb.append("IPV6ADDR_SECONDARIES=\"");
+	            mainSb.append("IPV6ADDR_SECONDARIES=\"");
 	            for (int i = 1; i < ipv6s.size(); i++) {
-	                sb.append(ipv6s.get(i)).append("/112").append(i == ipv6s.size() - 1 ? "" : " ");
+	                mainSb.append(ipv6s.get(i)).append("/112").append(i == ipv6s.size() - 1 ? "" : " ");
 	            }
-	            sb.append("\"\n");
+	            mainSb.append("\"\n");
 	        }
 	        String gv6 = ipv6s.get(0).substring(0, ipv6s.get(0).lastIndexOf(":") + 1) + "1";
-	        sb.append("IPV6_DEFAULTGW=").append(gv6).append("\n");
+	        mainSb.append("IPV6_DEFAULTGW=").append(gv6).append("\n");
 	    }
-	    sb.append("EOF\n\n");
+	    mainSb.append("EOF\n\n");
 
-	    // --- 處理 IPv4 Range 文件 (精確計算 CLONENUM) ---
-	    int currentCloneNum = 0;
-	    int rangeFileIdx = 0;
-
-	    for (int i = 0; i < ipv4Ranges.size(); i++) {
-	        List<String> currentSegment = new ArrayList<String>(ipv4Ranges.get(i));
-	        
-	        // 如果是第一段，移除掉已經被主文件佔用的主 IP
-	        if (i == 0) {
-	            currentSegment.remove(primaryV4);
-	        }
-
-	        if (currentSegment.isEmpty()) continue;
-
-	        sb.append("# --- IPv4 Range段: ").append(rangeFileIdx).append(" ---\n");
-	        sb.append("cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-").append(nicName)
-	          .append("-range").append(rangeFileIdx).append("\n");
-	        sb.append("IPADDR_START=").append(currentSegment.get(0)).append("\n");
-	        sb.append("IPADDR_END=").append(currentSegment.get(currentSegment.size() - 1)).append("\n");
-	        sb.append("NETMASK=").append(mask).append("\n");
-	        
-	        // 設定目前的起始編號
-	        sb.append("CLONENUM_START=").append(currentCloneNum).append("\n");
-	        sb.append("ARPCHECK=no\n");
-	        sb.append("EOF\n\n");
-
-	        // 精確累加編號：目前的編號 + 這一組 IP 的數量
-	        currentCloneNum += currentSegment.size();
-	        rangeFileIdx++;
-	    }
-
-	    sb.append("systemctl restart network\n");
-	    networkTextArea.setText(sb.toString());
+	    // 最後組合輸出
+	    networkTextArea.setText(mainSb.toString() + rangeSb.toString() + "systemctl restart network\n");
 	    networkTextArea.setCaretPosition(0);
 	}
 	
@@ -1075,7 +1096,7 @@ public class ping_view {
 	    String cidrInput = subnetField1.getText().trim();
 	    int prefix = Integer.parseInt(cidrInput.replace("/", "").trim());
 
-	    // 1. 解析所有 IP 並分類
+	    // 1. 解析所有 IP 並分類 (Java 8)
 	    List<String> allIps = new ArrayList<String>();
 	    for (String line : input.split("\n")) {
 	        if (!line.trim().isEmpty()) {
@@ -1091,26 +1112,25 @@ public class ping_view {
 	    }
 
 	    StringBuilder sb = new StringBuilder();
-	    long timestamp = System.currentTimeMillis() / 1000;
-
-	    sb.append("# --- Rocky Linux NetworkManager Keyfile ---\n");
-	    sb.append("# --- /etc/NetworkManager/system-connections/ ---\n");
+	    
+	    // 生成部署用的腳本格式
+	    sb.append("# --- Rocky Linux 9 NetworkManager 配置腳本 ---\n");
+	    sb.append("cat <<EOF > /etc/NetworkManager/system-connections/").append(nicName).append(".nmconnection\n");
+	    
 	    sb.append("[connection]\n");
 	    sb.append("id=").append(nicName).append("\n");
 	    sb.append("type=ethernet\n");
-	    // 修改優先權：如果要保證啟動，建議設為 100 或 0。
-	    sb.append("autoconnect-priority=100\n"); 
-	    sb.append("autoconnect-retries=1\n");
-	    sb.append("interface-name=").append(nicName).append("\n");
-	    sb.append("timestamp=").append(timestamp).append("\n\n");
+	    sb.append("autoconnect=true\n");
+	    sb.append("interface-name=").append(nicName).append("\n\n");
 
 	    sb.append("[ethernet]\n\n");
 
-	    // --- IPv4 ---
+	    // --- IPv4 區塊 ---
 	    sb.append("[ipv4]\n");
 	    if (!ipv4s.isEmpty()) {
 	        for (int i = 0; i < ipv4s.size(); i++) {
 	            if (i == 0) {
+	                // 第一個位址包含 Gateway
 	                String gv4 = calculateFirstAvailableIp(ipv4s.get(i), prefix);
 	                sb.append("address1=").append(ipv4s.get(i)).append("/").append(prefix).append(",").append(gv4).append("\n");
 	            } else {
@@ -1122,21 +1142,168 @@ public class ping_view {
 	    sb.append("may-fail=false\n");
 	    sb.append("method=manual\n\n");
 
-	    // --- IPv6 ---
+	    // --- IPv6 區塊 ---
 	    sb.append("[ipv6]\n");
-	    sb.append("method=manual\n");
 	    if (!ipv6s.isEmpty()) {
+	        sb.append("method=manual\n");
 	        for (int i = 0; i < ipv6s.size(); i++) {
 	            sb.append("address").append(i + 1).append("=").append(ipv6s.get(i)).append("/112\n");
 	        }
 	        String gv6 = ipv6s.get(0).substring(0, ipv6s.get(0).lastIndexOf(":") + 1) + "1";
 	        sb.append("gateway=").append(gv6).append("\n");
 	        sb.append("dns=2001:4860:4860::8888;\n");
+	    } else {
+	        // 沒有 IPv6 地址時，必須設為 ignore 避免啟動錯誤
+	        sb.append("method=ignore\n");
 	    }
 	    
+	    sb.append("\n[proxy]\n");
+	    sb.append("EOF\n\n");
+
+	    // --- 權限與重啟指令 ---
+	    sb.append("chmod 600 /etc/NetworkManager/system-connections/").append(nicName).append(".nmconnection\n");
+	    sb.append("nmcli connection load /etc/NetworkManager/system-connections/").append(nicName).append(".nmconnection\n");
+	    sb.append("nmcli connection up ").append(nicName).append("\n");
+
 	    networkTextArea.setText(sb.toString());
+	    networkTextArea.setCaretPosition(0);
 	}
 	
+	//ip addr 指令 生產配置指令
+	private void generateIpAddrConfig() {
+	    String input = textArea.getText().trim();
+	    if (input.isEmpty()) return;
+
+	    String nicName = NicOneField.getText().trim();
+	    String cidrInput = subnetField1.getText().trim();
+	    int prefix = Integer.parseInt(cidrInput.replace("/", "").trim());
+
+	    // 1. 解析所有 IP 並展開
+	    List<String> allIps = new ArrayList<String>();
+	    for (String line : input.split("\n")) {
+	        if (!line.trim().isEmpty()) {
+	            allIps.addAll(parseIpRange(line.trim()));
+	        }
+	    }
+
+	    StringBuilder sb = new StringBuilder();
+	    sb.append("# --- Linux IP Command 即時生效腳本 ---\n");
+	    sb.append("# 注意：此指令直接修改記憶體，重啟網卡或重載配置後會失效\n\n");
+
+	    String gatewayV4 = "";
+	    String gatewayV6 = "";
+
+	    for (String ip : allIps) {
+	        if (ip.contains(":")) {
+	            // IPv6 邏輯
+	            sb.append("ip -6 addr add ").append(ip).append("/112 dev ").append(nicName).append("\n");
+	            if (gatewayV6.isEmpty()) {
+	                gatewayV6 = ip.substring(0, ip.lastIndexOf(":") + 1) + "1";
+	            }
+	        } else {
+	            // IPv4 邏輯
+	            sb.append("ip addr add ").append(ip).append("/").append(prefix).append(" dev ").append(nicName).append("\n");
+	            if (gatewayV4.isEmpty()) {
+	                gatewayV4 = calculateFirstAvailableIp(ip, prefix);
+	            }
+	        }
+	    }
+
+	    sb.append("\n# --- 路由配置 ---\n");
+	    if (!gatewayV4.isEmpty()) {
+	        sb.append("ip route add default via ").append(gatewayV4).append(" dev ").append(nicName).append(" onlink\n");
+	    }
+	    if (!gatewayV6.isEmpty()) {
+	        sb.append("ip -6 route add default via ").append(gatewayV6).append(" dev ").append(nicName).append("\n");
+	    }
+
+	    networkTextArea.setText(sb.toString());
+	    networkTextArea.setCaretPosition(0);
+	}
+	
+	//整理IP-多個IP整理成一行方法
+	private void compactIpAndCount() {
+	    String input = textArea.getText().trim();
+	    if (input.isEmpty()) return;
+
+	    // 1. 展開並去重、排序
+	    List<String> allIps = new ArrayList<String>();
+	    for (String line : input.split("\n")) {
+	        if (!line.trim().isEmpty()) {
+	            // parseIpRange 會處理 192.168.1.1-5 這種格式並展開成清單
+	            allIps.addAll(parseIpRange(line.trim()));
+	        }
+	    }
+
+	    // 2. 統計總數 (包含重複的話可以用 Set 去重，這裡假設 James 要的是展開後的總量)
+	    int totalCount = 0;
+	    
+	    // 按前三碼分組
+	    Map<String, List<Integer>> groups = new LinkedHashMap<String, List<Integer>>();
+	    for (String ip : allIps) {
+	        if (ip.contains(":")) continue; // 跳過 IPv6
+	        
+	        totalCount++; // 累加總數
+	        
+	        int lastDot = ip.lastIndexOf(".");
+	        String prefix = ip.substring(0, lastDot);
+	        try {
+	            int lastOctet = Integer.parseInt(ip.substring(lastDot + 1));
+	            if (!groups.containsKey(prefix)) {
+	                groups.put(prefix, new ArrayList<Integer>());
+	            }
+	            // 避免同一行內重複計算
+	            if (!groups.get(prefix).contains(lastOctet)) {
+	                groups.get(prefix).add(lastOctet);
+	            }
+	        } catch (Exception e) {
+	            // 防止格式錯誤導致崩潰
+	        }
+	    }
+
+	    // 3. 壓縮邏輯
+	    StringBuilder sb = new StringBuilder();
+	    sb.append("# --- IP 壓縮整理結果 ---\n");
+	    
+	    for (Map.Entry<String, List<Integer>> entry : groups.entrySet()) {
+	        String prefix = entry.getKey();
+	        List<Integer> suffixList = entry.getValue();
+	        Collections.sort(suffixList);
+
+	        sb.append(prefix).append(".");
+	        
+	        List<String> segments = new ArrayList<String>();
+	        int i = 0;
+	        while (i < suffixList.size()) {
+	            int start = i;
+	            while (i + 1 < suffixList.size() && suffixList.get(i + 1) == suffixList.get(i) + 1) {
+	                i++;
+	            }
+	            
+	            if (i == start) {
+	                segments.add(suffixList.get(start).toString());
+	            } else {
+	                segments.add(suffixList.get(start) + "-" + suffixList.get(i));
+	            }
+	            i++;
+	        }
+	        
+	        // 用 / 合併
+	        for (int j = 0; j < segments.size(); j++) {
+	            sb.append(segments.get(j));
+	            if (j < segments.size() - 1) sb.append("/");
+	        }
+	        sb.append("\n");
+	    }
+
+	    // 4. 輸出統計資訊
+	    sb.append("\n# --- 統計資訊 ---\n");
+	    sb.append("總 IP 數量: ").append(totalCount).append(" 個\n");
+
+	    networkTextArea.setText(sb.toString());
+	    networkTextArea.setCaretPosition(0);
+	}
+		
 	/**
 	 * * 根據 IP 和 CIDR 計算該網段的第一個可用 IP (Gateway)，例如: 206.119.111.155/26 ->
 	 * 206.119.111.129
